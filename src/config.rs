@@ -1,4 +1,7 @@
-use std::{ffi::OsString, path::PathBuf, str::FromStr};
+use std::{
+  collections::HashMap, ffi::OsString, hash::RandomState, path::PathBuf,
+  str::FromStr,
+};
 
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
@@ -36,7 +39,7 @@ impl Config {
     let config = config.as_object()?;
 
     let procs = if let Some(procs) = config.get(&Value::from("procs")) {
-      let procs = procs
+      let mut procs = procs
         .as_object()?
         .into_iter()
         .map(|(name, proc)| {
@@ -52,6 +55,23 @@ impl Config {
         .into_iter()
         .filter_map(|x| x)
         .collect::<Vec<_>>();
+      let envs: HashMap<
+        String,
+        Option<IndexMap<String, Option<String>, RandomState>>,
+      > = procs
+        .iter()
+        .map(|proc| (proc.name.clone(), proc.env.clone()))
+        .collect();
+      for depend in &mut procs.iter_mut().flat_map(|proc| &mut proc.depends) {
+        match envs.get(depend.name.as_str()) {
+          Some(env) => {
+            depend.env = env.clone();
+          }
+          None => {
+            anyhow::bail!("Undefined dependency process \"{}\"", depend.name);
+          }
+        }
+      }
       procs
     } else {
       Vec::new()
@@ -108,6 +128,7 @@ pub struct ProcConfig {
 
   pub mouse_scroll_speed: usize,
   pub scrollback_len: usize,
+  pub depends: Vec<DependsConfig>,
 }
 
 impl ProcConfig {
@@ -135,6 +156,7 @@ impl ProcConfig {
 
         mouse_scroll_speed,
         scrollback_len,
+        depends: vec![],
       })),
       Value::Sequence(_) => {
         let cmd = val.as_array()?;
@@ -153,6 +175,7 @@ impl ProcConfig {
           stop: StopSignal::default(),
           mouse_scroll_speed,
           scrollback_len,
+          depends: vec![],
         }))
       }
       Value::Mapping(_) => {
@@ -269,6 +292,22 @@ impl ProcConfig {
           StopSignal::default()
         };
 
+        let depends = if let Some(depends) = map.get(&Value::from("depends")) {
+          depends
+            .as_object()?
+            .into_iter()
+            .filter_map(|(name, depend)| {
+              value_to_string(&name)
+                .ok()
+                .map(|name| DependsConfig::from_val(name, depend).ok())
+                .flatten()
+                .unwrap_or(None)
+            })
+            .collect()
+        } else {
+          vec![]
+        };
+
         Ok(Some(ProcConfig {
           name,
           cmd,
@@ -279,6 +318,7 @@ impl ProcConfig {
           stop: stop_signal,
           mouse_scroll_speed,
           scrollback_len,
+          depends,
         }))
       }
       Value::Tagged(_) => anyhow::bail!("Yaml tags are not supported"),
@@ -344,4 +384,27 @@ pub fn cmd_from_shell(shell: &str) -> CommandBuilder {
 #[cfg(not(windows))]
 pub fn cmd_from_shell(shell: &str) -> CommandBuilder {
   CommandBuilder::from_argv(vec!["/bin/sh".into(), "-c".into(), shell.into()])
+}
+
+pub struct DependsConfig {
+  pub name: String,
+  pub cmd: CmdConfig,
+  pub env: Option<IndexMap<String, Option<String>>>,
+}
+
+impl DependsConfig {
+  fn from_val(name: String, val: Val) -> Result<Option<Self>> {
+    match val.raw() {
+      Value::Null => Ok(None),
+      Value::String(shell) => Ok(Some(DependsConfig {
+        name,
+        cmd: CmdConfig::Shell {
+          shell: shell.to_owned(),
+        },
+        env: None,
+      })),
+      Value::Tagged(_) => anyhow::bail!("Yaml tags are not supported"),
+      _ => todo!(),
+    }
+  }
 }

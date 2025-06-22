@@ -50,6 +50,7 @@ pub fn load_npm_procs(settings: &Settings) -> Result<Vec<ProcConfig>> {
     stop: StopSignal::default(),
     mouse_scroll_speed: settings.mouse_scroll_speed,
     scrollback_len: settings.scrollback_len,
+    depends: vec![], // @todo Should package.json encode dependencies?
   });
   Ok(procs.collect())
 }

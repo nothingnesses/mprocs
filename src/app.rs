@@ -621,6 +621,7 @@ impl App {
             stop: StopSignal::default(),
             mouse_scroll_speed: self.config.mouse_scroll_speed,
             scrollback_len: self.config.scrollback_len,
+            depends: vec![], // @todo Should this be passed in as a parameter to the AddProc variant instead?
           },
           self.proc_tx.clone(),
           self.get_layout().term_area(),

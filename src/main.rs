@@ -159,6 +159,7 @@ async fn run_app() -> anyhow::Result<()> {
           stop: StopSignal::default(),
           mouse_scroll_speed: settings.mouse_scroll_speed,
           scrollback_len: settings.scrollback_len,
+          depends: vec![],
         })
         .collect::<Vec<_>>();
 

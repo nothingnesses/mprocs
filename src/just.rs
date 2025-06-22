@@ -47,6 +47,7 @@ pub fn load_just_procs(settings: &Settings) -> Result<Vec<ProcConfig>> {
       stop: StopSignal::default(),
       mouse_scroll_speed: settings.mouse_scroll_speed,
       scrollback_len: settings.scrollback_len,
+      depends: vec![], // @todo Should justfiles encode dependencies?
     });
   Ok(procs.collect())
 }
